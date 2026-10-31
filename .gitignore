@@ -1,0 +1,21 @@
+# Local tools & build artifacts
+maven-bin/
+backend/target/
+backend/.mvn/
+backend/*.log
+
+# Node & Angular
+frontend/dist/
+frontend/.angular/
+frontend/node_modules/
+node_modules/
+
+# IDE & OS
+.DS_Store
+*.iml
+.idea/
+.vscode/
+
+# Secrets
+.env
+.env.local
