@@ -1,5 +1,5 @@
 export const environment = {
   production: false,
   apiUrl: 'https://school-attendance-bigx.onrender.com/api',
-  googleClientId: '' // Set your Google OAuth Client ID from Google Cloud Console or Firebase
+  googleClientId: '6822673988-66rlafsrijcr012rflje2oou77ph1q9p.apps.googleusercontent.com'
 };
