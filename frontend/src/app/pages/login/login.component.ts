@@ -1,13 +1,13 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
+import { environment } from '../../environments/environment';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule],
   template: `
     <div class="login-wrapper">
       <div class="login-card">
@@ -46,7 +46,7 @@ import { AuthService } from '../../services/auth.service';
           <span>{{ errorMessage }}</span>
         </div>
 
-        <!-- Google-only login notice -->
+            <!-- Google-only login notice -->
         <div class="login-info-box">
           <div class="login-info-icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -209,19 +209,62 @@ export class LoginComponent {
   loading = false;
 
   loginWithGoogleOnly(): void {
+    if (!environment.googleClientId) {
+      this.loading = false;
+      this.errorMessage = 'Google sign-in is not configured for this app yet. Please set the Google Client ID in the environment.';
+      return;
+    }
+
     this.loading = true;
     this.errorMessage = '';
 
-    this.authService.loginWithGoogle().subscribe({
-      next: () => {
+    const googleClientId = environment.googleClientId;
+    const authUrl = `https://accounts.google.com/gsi/client?client_id=${encodeURIComponent(googleClientId)}`;
+
+    const script = document.createElement('script');
+    script.src = authUrl;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      const google = (window as any).google;
+      if (!google || !google.accounts || !google.accounts.id) {
         this.loading = false;
-        this.router.navigate(['/dashboard']);
-      },
-      error: (err) => {
-        this.loading = false;
-        this.errorMessage = err.error?.message || 'Google Sign-In is required. Please use your authorized school Google account.';
+        this.errorMessage = 'Google sign-in is not available right now. Please try again in a moment.';
+        return;
       }
-    });
+
+      google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: (response: any) => {
+          const idToken = response?.credential;
+          if (!idToken) {
+            this.loading = false;
+            this.errorMessage = 'Google login did not return a valid credential.';
+            return;
+          }
+
+          this.authService.loginWithGoogle(idToken).subscribe({
+            next: () => {
+              this.loading = false;
+              this.router.navigate(['/dashboard']);
+            },
+            error: (err) => {
+              this.loading = false;
+              this.errorMessage = err?.error?.message || err?.message || 'Google Sign-In is required. Please use your authorized school Google account.';
+            }
+          });
+        }
+      });
+
+      google.accounts.id.prompt();
+    };
+
+    script.onerror = () => {
+      this.loading = false;
+      this.errorMessage = 'Google sign-in could not be loaded. Please check the Google Client ID configuration.';
+    };
+
+    document.head.appendChild(script);
   }
 
 }

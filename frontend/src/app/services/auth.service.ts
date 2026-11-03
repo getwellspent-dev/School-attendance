@@ -1,7 +1,7 @@
 import { Injectable, signal, computed } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { Observable, tap } from 'rxjs';
+import { Observable, tap, throwError } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { AuthResponse, User } from '../models/attendance.models';
 
@@ -22,6 +22,10 @@ export class AuthService {
   constructor(private http: HttpClient, private router: Router) {}
 
   loginWithGoogle(idToken?: string, email?: string, name?: string, pictureUrl?: string): Observable<AuthResponse> {
+    if (!idToken) {
+      return throwError(() => new Error('Google Sign-In is required. Please sign in with your authorized Google account.'));
+    }
+
     return this.http.post<AuthResponse>(`${environment.apiUrl}/auth/google`, {
       idToken,
       email,
