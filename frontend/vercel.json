@@ -5,7 +5,7 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "https://school-attendance-backend.onrender.com/api/$1"
+      "dest": "https://school-attendance-bigx.onrender.com/api/$1"
     },
     {
       "handle": "filesystem"
