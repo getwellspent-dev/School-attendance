@@ -75,33 +75,6 @@ import { AuthService } from '../../services/auth.service';
           </button>
         </form>
 
-        <!-- Demo / Quick Access Box -->
-        <div class="demo-section">
-          <div class="divider">
-            <span>OR QUICK DEMO ACCESS</span>
-          </div>
-
-          <div class="demo-buttons">
-            <button (click)="quickLogin('admin')" [disabled]="loading" class="demo-btn demo-admin">
-              <div class="demo-role">MANAGEMENT / ADMIN</div>
-              <div class="demo-name">getwellspent&#64;gmail.com</div>
-              <div class="demo-desc">Full School Dashboards, Classes, Teachers, AI Reports</div>
-            </button>
-
-            <button (click)="quickLogin('teacher')" [disabled]="loading" class="demo-btn demo-teacher">
-              <div class="demo-role">CLASS TEACHER</div>
-              <div class="demo-name">sarah.teacher&#64;gmail.com</div>
-              <div class="demo-desc">Grade 10 - Section A (Roll Call, Student Profiles)</div>
-            </button>
-
-            <button (click)="quickLogin('teacher2')" [disabled]="loading" class="demo-btn demo-teacher">
-              <div class="demo-role">CLASS TEACHER</div>
-              <div class="demo-name">david.teacher&#64;gmail.com</div>
-              <div class="demo-desc">Grade 10 - Section B (Roll Call, Student Profiles)</div>
-            </button>
-          </div>
-        </div>
-
         <!-- Footer -->
         <div class="card-footer">
           <p>Super Admin: <code>getwellspent&#64;gmail.com</code></p>
@@ -203,60 +176,6 @@ import { AuthService } from '../../services/auth.service';
       font-size: 0.95rem;
       gap: 0.625rem;
     }
-    .divider {
-      display: flex;
-      align-items: center;
-      text-align: center;
-      margin: 1.5rem 0 1rem;
-    }
-    .divider::before, .divider::after {
-      content: '';
-      flex: 1;
-      border-bottom: 1px solid var(--border-color);
-    }
-    .divider span {
-      padding: 0 0.75rem;
-      font-size: 0.6875rem;
-      font-weight: 700;
-      color: var(--text-subtle);
-      letter-spacing: 0.05em;
-    }
-    .demo-buttons {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-    .demo-btn {
-      text-align: left;
-      padding: 0.75rem 1rem;
-      border-radius: var(--radius-md);
-      border: 1px solid var(--border-color);
-      background-color: var(--bg-card);
-      cursor: pointer;
-      transition: all 0.15s ease;
-    }
-    .demo-btn:hover {
-      border-color: var(--primary);
-      background-color: var(--primary-light);
-      transform: translateY(-1px);
-    }
-    .demo-role {
-      font-size: 0.6875rem;
-      font-weight: 800;
-      letter-spacing: 0.05em;
-      color: var(--primary);
-    }
-    .demo-name {
-      font-size: 0.875rem;
-      font-weight: 700;
-      color: var(--text-main);
-      font-family: var(--font-mono);
-    }
-    .demo-desc {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      margin-top: 0.15rem;
-    }
     .card-footer {
       margin-top: 1.5rem;
       padding-top: 1rem;
@@ -303,19 +222,4 @@ export class LoginComponent {
     });
   }
 
-  quickLogin(role: 'admin' | 'teacher' | 'teacher2'): void {
-    this.loading = true;
-    this.errorMessage = '';
-
-    this.authService.demoLogin(role).subscribe({
-      next: () => {
-        this.loading = false;
-        this.router.navigate(['/dashboard']);
-      },
-      error: (err) => {
-        this.loading = false;
-        this.errorMessage = err.error?.message || 'Quick login failed.';
-      }
-    });
-  }
 }

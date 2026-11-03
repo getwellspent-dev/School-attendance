@@ -33,26 +33,6 @@ public class AuthController {
         }
     }
 
-    @PostMapping("/demo-login")
-    public ResponseEntity<?> demoLogin(@RequestParam(defaultValue = "admin") String role) {
-        AuthRequest req = new AuthRequest();
-        if ("teacher".equalsIgnoreCase(role)) {
-            req.setEmail("sarah.teacher@gmail.com");
-            req.setName("Sarah Jenkins (Teacher)");
-        } else if ("teacher2".equalsIgnoreCase(role)) {
-            req.setEmail("david.teacher@gmail.com");
-            req.setName("David Kumar (Teacher)");
-        } else {
-            req.setEmail(authService.getAdminEmail());
-            req.setName("School Management (Admin)");
-        }
-        try {
-            return ResponseEntity.ok(authService.authenticate(req));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
-        }
-    }
-
     @GetMapping("/me")
     public ResponseEntity<?> getCurrentUser(@AuthenticationPrincipal User user) {
         if (user == null) {

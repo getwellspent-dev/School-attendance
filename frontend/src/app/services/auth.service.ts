@@ -32,12 +32,6 @@ export class AuthService {
     );
   }
 
-  demoLogin(role: 'admin' | 'teacher' | 'teacher2' = 'admin'): Observable<AuthResponse> {
-    return this.http.post<AuthResponse>(`${environment.apiUrl}/auth/demo-login?role=${role}`, {}).pipe(
-      tap(res => this.handleAuthSuccess(res))
-    );
-  }
-
   logout(): void {
     localStorage.removeItem(this.TOKEN_KEY);
     localStorage.removeItem(this.USER_KEY);
