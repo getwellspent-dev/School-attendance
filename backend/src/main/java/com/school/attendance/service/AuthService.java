@@ -41,48 +41,44 @@ public class AuthService {
 
     @Transactional
     public AuthResponse authenticate(AuthRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("Authentication request is required");
+        }
+
+        String idToken = request.getIdToken();
+        if (!StringUtils.hasText(idToken)) {
+            throw new IllegalArgumentException("Google Sign-In is required. Please sign in with your Google account.");
+        }
+
         String email = null;
         String name = null;
         String pictureUrl = null;
 
-        // 1. Try Google ID token verification if provided
-        if (StringUtils.hasText(request.getIdToken())) {
-            try {
-                GoogleIdTokenVerifier.Builder verifierBuilder = new GoogleIdTokenVerifier.Builder(
-                        new NetHttpTransport(), GsonFactory.getDefaultInstance());
+        try {
+            GoogleIdTokenVerifier.Builder verifierBuilder = new GoogleIdTokenVerifier.Builder(
+                    new NetHttpTransport(), GsonFactory.getDefaultInstance());
 
-                if (StringUtils.hasText(googleClientId)) {
-                    verifierBuilder.setAudience(Collections.singletonList(googleClientId));
-                }
-
-                GoogleIdTokenVerifier verifier = verifierBuilder.build();
-                GoogleIdToken idToken = verifier.verify(request.getIdToken());
-
-                if (idToken != null) {
-                    GoogleIdToken.Payload payload = idToken.getPayload();
-                    email = payload.getEmail();
-                    name = (String) payload.get("name");
-                    pictureUrl = (String) payload.get("picture");
-                } else {
-                    throw new IllegalArgumentException("Invalid Google ID token");
-                }
-            } catch (Exception e) {
-                // If token verification with library fails (e.g. clock skew or test token), fallback to direct email if provided
-                if (!StringUtils.hasText(request.getEmail())) {
-                    throw new RuntimeException("Google authentication failed: " + e.getMessage());
-                }
+            if (StringUtils.hasText(googleClientId)) {
+                verifierBuilder.setAudience(Collections.singletonList(googleClientId));
             }
+
+            GoogleIdTokenVerifier verifier = verifierBuilder.build();
+            GoogleIdToken googleIdToken = verifier.verify(idToken);
+
+            if (googleIdToken == null) {
+                throw new IllegalArgumentException("Invalid Google ID token");
+            }
+
+            GoogleIdToken.Payload payload = googleIdToken.getPayload();
+            email = payload.getEmail();
+            name = (String) payload.get("name");
+            pictureUrl = (String) payload.get("picture");
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Google authentication failed: " + e.getMessage(), e);
         }
 
-        // 2. Direct email login fallback (used for Google sign-in payload or dev testing)
         if (!StringUtils.hasText(email)) {
-            email = request.getEmail();
-            name = request.getName();
-            pictureUrl = request.getPictureUrl();
-        }
-
-        if (!StringUtils.hasText(email)) {
-            throw new IllegalArgumentException("Email is required for authentication");
+            throw new IllegalArgumentException("Google login did not return a valid email address.");
         }
 
         email = email.trim().toLowerCase();
@@ -103,7 +99,6 @@ public class AuthService {
             user.setLastLoginAt(LocalDateTime.now());
             user = userRepository.save(user);
         } else {
-            // Check if this is the designated primary admin email
             if (email.equalsIgnoreCase(adminEmail)) {
                 user = new User(
                         email,

@@ -46,34 +46,27 @@ import { AuthService } from '../../services/auth.service';
           <span>{{ errorMessage }}</span>
         </div>
 
-        <!-- Google Direct Login Form -->
-        <form (ngSubmit)="loginWithCustomEmail()" class="login-form">
-          <div class="form-group">
-            <label class="form-label" for="gmail">Enter Your Gmail Account</label>
-            <div class="input-with-icon">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect width="20" height="16" x="2" y="4" rx="2"/>
-                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
-              </svg>
-              <input
-                id="gmail"
-                type="email"
-                [(ngModel)]="customEmail"
-                name="customEmail"
-                placeholder="e.g. getwellspent@gmail.com"
-                required
-                class="form-input"
-              />
-            </div>
-          </div>
-
-          <button type="submit" [disabled]="loading || !customEmail" class="btn btn-primary btn-block">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M21.35 11.1h-9.17v2.98h5.27c-.23 1.2-1.39 3.51-5.27 3.51-3.17 0-5.76-2.58-5.76-5.76s2.59-5.76 5.76-5.76c1.8 0 3.01.77 3.7 1.43l2.36-2.27C21.99 3.78 19.34 2.5 15.18 2.5 9.66 2.5 5.18 6.98 5.18 12.5s4.48 10 10 10c5.77 0 9.6-4.05 9.6-9.77 0-.66-.07-1.16-.13-1.63z"/>
+        <!-- Google-only login notice -->
+        <div class="login-info-box">
+          <div class="login-info-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 8v4"/>
+              <path d="M12 16h.01"/>
             </svg>
-            <span>{{ loading ? 'Signing in...' : 'Sign in with Google' }}</span>
-          </button>
-        </form>
+          </div>
+          <div class="login-info-content">
+            <strong>Google Sign-In Required</strong>
+            <span>Only Google accounts already approved by the school can access this portal.</span>
+          </div>
+        </div>
+
+        <button type="button" [disabled]="loading" class="btn btn-primary btn-block" (click)="loginWithGoogleOnly()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M21.35 11.1h-9.17v2.98h5.27c-.23 1.2-1.39 3.51-5.27 3.51-3.17 0-5.76-2.58-5.76-5.76s2.59-5.76 5.76-5.76c1.8 0 3.01.77 3.7 1.43l2.36-2.27C21.99 3.78 19.34 2.5 15.18 2.5 9.66 2.5 5.18 6.98 5.18 12.5s4.48 10 10 10c5.77 0 9.6-4.05 9.6-9.77 0-.66-.07-1.16-.13-1.63z"/>
+          </svg>
+          <span>{{ loading ? 'Signing in...' : 'Continue with Google' }}</span>
+        </button>
 
         <!-- Footer -->
         <div class="card-footer">
@@ -157,18 +150,29 @@ import { AuthService } from '../../services/auth.service';
       font-size: 0.8125rem;
       font-weight: 500;
     }
-    .input-with-icon {
-      position: relative;
+    .login-info-box {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      background: #f8fafc;
+      border: 1px solid #dfe7f1;
+      border-radius: var(--radius-md);
+      padding: 0.875rem 1rem;
+      margin-bottom: 1.25rem;
+      color: var(--text-main);
+      font-size: 0.8125rem;
+    }
+    .login-info-icon {
       display: flex;
       align-items: center;
+      justify-content: center;
+      color: var(--primary);
+      margin-top: 0.125rem;
     }
-    .input-with-icon svg {
-      position: absolute;
-      left: 0.875rem;
-      color: var(--text-subtle);
-    }
-    .input-with-icon input {
-      padding-left: 2.5rem;
+    .login-info-content {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
     }
     .btn-block {
       width: 100%;
@@ -201,23 +205,21 @@ export class LoginComponent {
   private authService = inject(AuthService);
   private router = inject(Router);
 
-  customEmail = '';
   errorMessage = '';
   loading = false;
 
-  loginWithCustomEmail(): void {
-    if (!this.customEmail) return;
+  loginWithGoogleOnly(): void {
     this.loading = true;
     this.errorMessage = '';
 
-    this.authService.loginWithGoogle(undefined, this.customEmail).subscribe({
+    this.authService.loginWithGoogle().subscribe({
       next: () => {
         this.loading = false;
         this.router.navigate(['/dashboard']);
       },
       error: (err) => {
         this.loading = false;
-        this.errorMessage = err.error?.message || 'Login failed. Please verify your email with the school administrator.';
+        this.errorMessage = err.error?.message || 'Google Sign-In is required. Please use your authorized school Google account.';
       }
     });
   }
