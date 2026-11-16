@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, AfterViewInit, ElementRef, ViewChild, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
@@ -46,27 +46,14 @@ import { environment } from '../../../environments/environment';
           <span>{{ errorMessage }}</span>
         </div>
 
-            <!-- Google-only login notice -->
-        <div class="login-info-box">
-          <div class="login-info-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"/>
-              <path d="M12 8v4"/>
-              <path d="M12 16h.01"/>
-            </svg>
-          </div>
-          <div class="login-info-content">
-            <strong>Google Sign-In Required</strong>
-            <span>Only Google accounts already approved by the school can access this portal.</span>
+        <!-- Google Sign-In Button container (rendered by Google SDK) -->
+        <div class="google-btn-wrapper">
+          <div #googleBtnContainer id="google-signin-btn"></div>
+          <div *ngIf="!googleReady && !errorMessage" class="btn-loading">
+            <div class="spinner"></div>
+            <span>Loading Google Sign-In...</span>
           </div>
         </div>
-
-        <button type="button" [disabled]="loading" class="btn btn-primary btn-block" (click)="loginWithGoogleOnly()">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M21.35 11.1h-9.17v2.98h5.27c-.23 1.2-1.39 3.51-5.27 3.51-3.17 0-5.76-2.58-5.76-5.76s2.59-5.76 5.76-5.76c1.8 0 3.01.77 3.7 1.43l2.36-2.27C21.99 3.78 19.34 2.5 15.18 2.5 9.66 2.5 5.18 6.98 5.18 12.5s4.48 10 10 10c5.77 0 9.6-4.05 9.6-9.77 0-.66-.07-1.16-.13-1.63z"/>
-          </svg>
-          <span>{{ loading ? 'Signing in...' : 'Continue with Google' }}</span>
-        </button>
 
         <!-- Footer -->
         <div class="card-footer">
@@ -150,36 +137,32 @@ import { environment } from '../../../environments/environment';
       font-size: 0.8125rem;
       font-weight: 500;
     }
-    .login-info-box {
+    .google-btn-wrapper {
       display: flex;
-      align-items: flex-start;
-      gap: 0.75rem;
-      background: #f8fafc;
-      border: 1px solid #dfe7f1;
-      border-radius: var(--radius-md);
-      padding: 0.875rem 1rem;
+      justify-content: center;
+      align-items: center;
+      min-height: 48px;
       margin-bottom: 1.25rem;
-      color: var(--text-main);
-      font-size: 0.8125rem;
     }
-    .login-info-icon {
+    #google-signin-btn {
+      width: 100%;
+    }
+    .btn-loading {
       display: flex;
       align-items: center;
-      justify-content: center;
-      color: var(--primary);
-      margin-top: 0.125rem;
+      gap: 0.75rem;
+      color: var(--text-muted);
+      font-size: 0.875rem;
     }
-    .login-info-content {
-      display: flex;
-      flex-direction: column;
-      gap: 0.2rem;
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--border-color);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
     }
-    .btn-block {
-      width: 100%;
-      padding: 0.75rem;
-      font-size: 0.95rem;
-      gap: 0.625rem;
-    }
+    @keyframes spin { to { transform: rotate(360deg); } }
     .card-footer {
       margin-top: 1.5rem;
       padding-top: 1rem;
@@ -201,70 +184,94 @@ import { environment } from '../../../environments/environment';
     }
   `]
 })
-export class LoginComponent {
+export class LoginComponent implements AfterViewInit {
+  @ViewChild('googleBtnContainer') googleBtnContainer!: ElementRef;
+
   private authService = inject(AuthService);
   private router = inject(Router);
+  private ngZone = inject(NgZone);
 
   errorMessage = '';
-  loading = false;
+  googleReady = false;
 
-  loginWithGoogleOnly(): void {
+  ngAfterViewInit(): void {
+    this.loadGoogleSDK();
+  }
+
+  private loadGoogleSDK(): void {
     if (!environment.googleClientId) {
-      this.loading = false;
-      this.errorMessage = 'Google sign-in is not configured for this app yet. Please set the Google Client ID in the environment.';
+      this.errorMessage = 'Google Client ID is not configured. Please contact the administrator.';
       return;
     }
 
-    this.loading = true;
-    this.errorMessage = '';
-
-    const googleClientId = environment.googleClientId;
-    const authUrl = `https://accounts.google.com/gsi/client?client_id=${encodeURIComponent(googleClientId)}`;
+    // If SDK already loaded, just render the button
+    if ((window as any).google?.accounts?.id) {
+      this.renderGoogleButton();
+      return;
+    }
 
     const script = document.createElement('script');
-    script.src = authUrl;
+    script.src = 'https://accounts.google.com/gsi/client';
     script.async = true;
     script.defer = true;
-    script.onload = () => {
-      const google = (window as any).google;
-      if (!google || !google.accounts || !google.accounts.id) {
-        this.loading = false;
-        this.errorMessage = 'Google sign-in is not available right now. Please try again in a moment.';
-        return;
-      }
-
-      google.accounts.id.initialize({
-        client_id: googleClientId,
-        callback: (response: any) => {
-          const idToken = response?.credential;
-          if (!idToken) {
-            this.loading = false;
-            this.errorMessage = 'Google login did not return a valid credential.';
-            return;
-          }
-
-          this.authService.loginWithGoogle(idToken).subscribe({
-            next: () => {
-              this.loading = false;
-              this.router.navigate(['/dashboard']);
-            },
-            error: (err) => {
-              this.loading = false;
-              this.errorMessage = err?.error?.message || err?.message || 'Google Sign-In is required. Please use your authorized school Google account.';
-            }
-          });
-        }
-      });
-
-      google.accounts.id.prompt();
-    };
-
+    script.onload = () => this.renderGoogleButton();
     script.onerror = () => {
-      this.loading = false;
-      this.errorMessage = 'Google sign-in could not be loaded. Please check the Google Client ID configuration.';
+      this.ngZone.run(() => {
+        this.errorMessage = 'Could not load Google Sign-In. Check your internet connection and try again.';
+      });
     };
-
     document.head.appendChild(script);
   }
 
+  private renderGoogleButton(): void {
+    const google = (window as any).google;
+    if (!google?.accounts?.id) return;
+
+    google.accounts.id.initialize({
+      client_id: environment.googleClientId,
+      // Cancel One Tap so user MUST click the explicit button — works for all accounts
+      cancel_on_tap_outside: true,
+      callback: (response: any) => {
+        const idToken = response?.credential;
+        if (!idToken) {
+          this.ngZone.run(() => {
+            this.errorMessage = 'Google login did not return a valid credential. Please try again.';
+          });
+          return;
+        }
+        this.ngZone.run(() => this.handleToken(idToken));
+      }
+    });
+
+    // Render a full-width Sign In With Google button — user can choose any account
+    google.accounts.id.renderButton(
+      document.getElementById('google-signin-btn'),
+      {
+        theme: 'outline',
+        size: 'large',
+        width: '400',
+        text: 'signin_with',
+        shape: 'rectangular',
+        logo_alignment: 'left'
+      }
+    );
+
+    this.ngZone.run(() => { this.googleReady = true; });
+  }
+
+  private handleToken(idToken: string): void {
+    this.errorMessage = '';
+    this.authService.loginWithGoogle(idToken).subscribe({
+      next: () => {
+        this.router.navigate(['/dashboard']);
+      },
+      error: (err) => {
+        this.errorMessage =
+          err?.error?.message ||
+          err?.message ||
+          'Access denied. Your Google account is not registered in the school system. Please contact the administrator.';
+      }
+    });
+  }
 }
+
