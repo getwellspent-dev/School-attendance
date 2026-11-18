@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterModule } from '@angular/router';
 import { AttendanceApiService } from '../../services/attendance-api.service';
 import { AuthService } from '../../services/auth.service';
-import { Classroom, CreateStudentRequest, Student } from '../../models/attendance.models';
+import { Classroom, CreateClassroomRequest, CreateStudentRequest, Student, User } from '../../models/attendance.models';
 
 @Component({
   selector: 'app-class-detail',
@@ -34,6 +34,14 @@ import { Classroom, CreateStudentRequest, Student } from '../../models/attendanc
         </div>
 
         <div class="banner-actions">
+          <button *ngIf="authService.isAdmin()" (click)="openEditClassModal()" class="btn btn-secondary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            </svg>
+            <span>Edit Class / Teacher</span>
+          </button>
+
           <button (click)="openAddModal()" class="btn btn-primary">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
@@ -292,6 +300,62 @@ import { Classroom, CreateStudentRequest, Student } from '../../models/attendanc
           </form>
         </div>
       </div>
+
+      <!-- Edit Classroom Modal (Assign / Change Teacher) -->
+      <div *ngIf="showEditClassModal" class="modal-backdrop" (click)="closeEditClassModal()">
+        <div class="modal-content" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <h3 class="card-title">Edit Class / Assign Teacher</h3>
+            <button (click)="closeEditClassModal()" class="btn-close">✕</button>
+          </div>
+
+          <form (ngSubmit)="submitEditClass()">
+            <div class="modal-body">
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label" for="ec-grade">Grade / Standard *</label>
+                  <input id="ec-grade" type="text" [(ngModel)]="editClassForm.grade" name="grade" required class="form-input" placeholder="e.g. Grade 10"/>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="ec-sec">Section *</label>
+                  <input id="ec-sec" type="text" [(ngModel)]="editClassForm.section" name="section" required class="form-input" placeholder="e.g. A, B"/>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label" for="ec-room">Room Number</label>
+                  <input id="ec-room" type="text" [(ngModel)]="editClassForm.roomNumber" name="roomNumber" class="form-input" placeholder="e.g. Room 204"/>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="ec-year">Academic Year</label>
+                  <input id="ec-year" type="text" [(ngModel)]="editClassForm.academicYear" name="academicYear" class="form-input" placeholder="2025-2026"/>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="ec-teacher">Assign Class Teacher *</label>
+                <select id="ec-teacher" [(ngModel)]="editClassForm.classTeacherId" name="classTeacherId" class="form-select">
+                  <option [ngValue]="null">-- No Teacher Assigned --</option>
+                  <option *ngFor="let t of teachers" [ngValue]="t.id">
+                    {{ t.name }} ({{ t.email }})
+                  </option>
+                </select>
+                <p class="form-hint" style="font-size:0.75rem; color:var(--text-subtle); margin-top:0.25rem;">
+                  Select a registered teacher to assign as class teacher for this room.
+                </p>
+              </div>
+            </div>
+
+            <div class="modal-footer">
+              <button type="button" (click)="closeEditClassModal()" class="btn btn-secondary">Cancel</button>
+              <button type="submit" [disabled]="submittingClassEdit" class="btn btn-primary">
+                {{ submittingClassEdit ? 'Saving...' : 'Save Changes' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>
   `,
   styles: [`
@@ -495,6 +559,18 @@ export class ClassDetailComponent implements OnInit {
   editStudentId: number | null = null;
   editStudent: Partial<CreateStudentRequest> = {};
 
+  // Edit Classroom / Assign Teacher state
+  teachers: User[] = [];
+  showEditClassModal = false;
+  submittingClassEdit = false;
+  editClassForm: CreateClassroomRequest = {
+    grade: '',
+    section: '',
+    roomNumber: '',
+    academicYear: '2025-2026',
+    classTeacherId: undefined
+  };
+
   ngOnInit(): void {
     this.route.paramMap.subscribe(params => {
       const id = params.get('id');
@@ -517,11 +593,31 @@ export class ClassDetailComponent implements OnInit {
         this.errorMessage = 'Failed to load classroom details.';
       }
     });
+
+    if (this.authService.isAdmin()) {
+      this.api.getTeachers().subscribe({
+        next: (tList) => this.teachers = tList,
+        error: () => {}
+      });
+    }
+  }
+
+  compareRoll(r1: string, r2: string): number {
+    if (!r1 && !r2) return 0;
+    if (!r1) return -1;
+    if (!r2) return 1;
+    const n1 = parseInt(r1, 10);
+    const n2 = parseInt(r2, 10);
+    if (!isNaN(n1) && !isNaN(n2)) {
+      if (n1 !== n2) return n1 - n2;
+    }
+    return r1.localeCompare(r2, undefined, { numeric: true, sensitivity: 'base' });
   }
 
   loadStudents(): void {
     this.api.getStudentsByClassroom(this.classroomId).subscribe({
       next: (data) => {
+        data.sort((a, b) => this.compareRoll(a.rollNumber, b.rollNumber));
         this.students = data;
         this.filteredStudents = data;
         this.loading = false;
@@ -529,6 +625,42 @@ export class ClassDetailComponent implements OnInit {
       error: () => {
         this.loading = false;
         this.errorMessage = 'Failed to load students in this folder.';
+      }
+    });
+  }
+
+  openEditClassModal(): void {
+    if (!this.classroom) return;
+    this.editClassForm = {
+      grade: this.classroom.grade,
+      section: this.classroom.section,
+      roomNumber: this.classroom.roomNumber || '',
+      academicYear: this.classroom.academicYear,
+      classTeacherId: this.classroom.classTeacherId || undefined
+    };
+    this.showEditClassModal = true;
+    this.successMessage = '';
+    this.errorMessage = '';
+  }
+
+  closeEditClassModal(): void {
+    this.showEditClassModal = false;
+  }
+
+  submitEditClass(): void {
+    if (!this.classroom || !this.editClassForm.grade || !this.editClassForm.section) return;
+    this.submittingClassEdit = true;
+
+    this.api.updateClassroom(this.classroom.id, this.editClassForm).subscribe({
+      next: (updatedCls) => {
+        this.classroom = updatedCls;
+        this.submittingClassEdit = false;
+        this.closeEditClassModal();
+        this.successMessage = 'Classroom and class teacher updated successfully!';
+      },
+      error: (err) => {
+        this.submittingClassEdit = false;
+        this.errorMessage = err.error?.message || 'Failed to update classroom.';
       }
     });
   }

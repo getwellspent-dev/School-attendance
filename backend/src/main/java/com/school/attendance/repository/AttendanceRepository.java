@@ -41,4 +41,8 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
 
     @Query("SELECT COUNT(a) FROM Attendance a WHERE a.student.id = :studentId AND a.status = :status AND a.date BETWEEN :startDate AND :endDate")
     long countStudentDaysInRangeByStatus(@Param("studentId") Long studentId, @Param("status") AttendanceStatus status, @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("DELETE FROM Attendance a WHERE a.student.id = :studentId")
+    void deleteByStudentId(@Param("studentId") Long studentId);
 }

@@ -19,6 +19,7 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
     List<Student> findAllActiveStudents();
 
     Optional<Student> findByAdmissionNumberIgnoreCase(String admissionNumber);
+    List<Student> findByClassroomIdAndRollNumber(Long classroomId, String rollNumber);
     long countByActiveTrue();
     long countByClassroomAndActiveTrue(Classroom classroom);
 

@@ -96,6 +96,13 @@ import { Classroom, CreateClassroomRequest, User } from '../../models/attendance
               <span>Take Attendance</span>
             </a>
 
+            <button *ngIf="authService.isAdmin()" (click)="openEditModal(c)" class="btn-icon-edit" title="Edit Classroom / Assign Teacher">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
+
             <button *ngIf="authService.isAdmin()" (click)="deleteClass(c)" class="btn-icon-danger" title="Archive Classroom">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
@@ -112,9 +119,62 @@ import { Classroom, CreateClassroomRequest, User } from '../../models/attendance
         </div>
       </div>
 
-      <!-- Create Classroom Modal Dialog -->
-      <div *ngIf="showModal" class="modal-backdrop" (click)="closeModal()">
+      <!-- Edit Classroom Modal (Assign / Change Teacher) -->
+      <div *ngIf="showEditModal" class="modal-backdrop" (click)="closeEditModal()">
         <div class="modal-content" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <h3 class="card-title">Edit Classroom — {{ editClass.grade }} {{ editClass.section }}</h3>
+            <button (click)="closeEditModal()" class="btn-close">✕</button>
+          </div>
+
+          <form (ngSubmit)="submitEdit()">
+            <div class="modal-body">
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label" for="e-grade">Grade / Standard *</label>
+                  <input id="e-grade" type="text" [(ngModel)]="editClass.grade" name="grade" required class="form-input" placeholder="e.g. Grade 10"/>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="e-sec">Section *</label>
+                  <input id="e-sec" type="text" [(ngModel)]="editClass.section" name="section" required class="form-input" placeholder="e.g. A, B"/>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label" for="e-room">Room Number</label>
+                  <input id="e-room" type="text" [(ngModel)]="editClass.roomNumber" name="roomNumber" class="form-input" placeholder="e.g. Room 204"/>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="e-year">Academic Year</label>
+                  <input id="e-year" type="text" [(ngModel)]="editClass.academicYear" name="academicYear" class="form-input" placeholder="2025-2026"/>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="e-teacher">Assign Class Teacher *</label>
+                <select id="e-teacher" [(ngModel)]="editClass.classTeacherId" name="classTeacherId" class="form-select">
+                  <option [ngValue]="null">-- No Teacher Assigned --</option>
+                  <option *ngFor="let t of teachers" [ngValue]="t.id">
+                    {{ t.name }} ({{ t.email }})
+                  </option>
+                </select>
+                <p class="form-hint">Select the teacher to assign as class teacher. Only registered Gmail users appear here.</p>
+              </div>
+            </div>
+
+            <div class="modal-footer">
+              <button type="button" (click)="closeEditModal()" class="btn btn-secondary">Cancel</button>
+              <button type="submit" [disabled]="submittingEdit" class="btn btn-primary">
+                {{ submittingEdit ? 'Saving...' : 'Save Changes' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Create Classroom Modal Dialog -->
+      <div *ngIf="showModal" class="modal-backdrop" (click)="closeModal()">        <div class="modal-content" (click)="$event.stopPropagation()">
           <div class="modal-header">
             <h3 class="card-title">Create New Call Room / Class Folder</h3>
             <button (click)="closeModal()" class="btn-close">✕</button>
@@ -305,6 +365,22 @@ import { Classroom, CreateClassroomRequest, User } from '../../models/attendance
       margin-top: auto;
     }
     .flex-1 { flex: 1; }
+    .btn-icon-edit {
+      background: none;
+      border: 1px solid var(--border-color);
+      color: var(--text-muted);
+      border-radius: var(--radius-md);
+      padding: 0.5rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .btn-icon-edit:hover {
+      background: var(--primary-light);
+      color: var(--primary);
+      border-color: #bfdbfe;
+    }
     .btn-icon-danger {
       background: none;
       border: 1px solid var(--border-color);
@@ -443,6 +519,18 @@ export class ClassesComponent implements OnInit {
     classTeacherId: undefined
   };
 
+  // Edit classroom state
+  showEditModal = false;
+  submittingEdit = false;
+  editClassId: number | null = null;
+  editClass: CreateClassroomRequest = {
+    grade: '',
+    section: '',
+    roomNumber: '',
+    academicYear: '2025-2026',
+    classTeacherId: undefined
+  };
+
   ngOnInit(): void {
     this.loadData();
   }
@@ -481,6 +569,43 @@ export class ClassesComponent implements OnInit {
 
   closeModal(): void {
     this.showModal = false;
+  }
+
+  openEditModal(c: Classroom): void {
+    this.editClassId = c.id;
+    this.editClass = {
+      grade: c.grade,
+      section: c.section,
+      roomNumber: c.roomNumber || '',
+      academicYear: c.academicYear,
+      classTeacherId: c.classTeacherId || undefined
+    };
+    this.showEditModal = true;
+    this.successMessage = '';
+    this.errorMessage = '';
+  }
+
+  closeEditModal(): void {
+    this.showEditModal = false;
+    this.editClassId = null;
+  }
+
+  submitEdit(): void {
+    if (!this.editClassId || !this.editClass.grade || !this.editClass.section) return;
+    this.submittingEdit = true;
+
+    this.api.updateClassroom(this.editClassId, this.editClass).subscribe({
+      next: () => {
+        this.submittingEdit = false;
+        this.closeEditModal();
+        this.successMessage = 'Classroom updated and teacher assigned successfully!';
+        this.loadData();
+      },
+      error: (err) => {
+        this.submittingEdit = false;
+        this.errorMessage = err.error?.message || 'Failed to update classroom.';
+      }
+    });
   }
 
   submitClassroom(): void {

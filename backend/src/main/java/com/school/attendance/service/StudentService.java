@@ -14,6 +14,9 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -22,6 +25,8 @@ public class StudentService {
     private final StudentRepository studentRepository;
     private final ClassroomRepository classroomRepository;
     private final AttendanceRepository attendanceRepository;
+
+    private static final Pattern NUMERIC_PREFIX_PATTERN = Pattern.compile("^(\\d+)(.*)$");
 
     public StudentService(
             StudentRepository studentRepository,
@@ -32,6 +37,33 @@ public class StudentService {
         this.attendanceRepository = attendanceRepository;
     }
 
+    /**
+     * Natural numeric comparator for Roll Numbers:
+     * Sorts 1, 2, 3, ... 9, 10, 11 naturally instead of alphabetical (1, 10, 2).
+     */
+    public static int compareRollNumbers(String r1, String r2) {
+        if (r1 == null && r2 == null) return 0;
+        if (r1 == null) return -1;
+        if (r2 == null) return 1;
+        String s1 = r1.trim();
+        String s2 = r2.trim();
+
+        Matcher m1 = NUMERIC_PREFIX_PATTERN.matcher(s1);
+        Matcher m2 = NUMERIC_PREFIX_PATTERN.matcher(s2);
+
+        if (m1.matches() && m2.matches()) {
+            try {
+                long num1 = Long.parseLong(m1.group(1));
+                long num2 = Long.parseLong(m2.group(1));
+                if (num1 != num2) {
+                    return Long.compare(num1, num2);
+                }
+                return m1.group(2).compareToIgnoreCase(m2.group(2));
+            } catch (NumberFormatException ignored) {}
+        }
+        return s1.compareToIgnoreCase(s2);
+    }
+
     @Transactional(readOnly = true)
     public List<StudentDto> getStudentsByClassroom(Long classroomId) {
         Classroom classroom = classroomRepository.findById(classroomId)
@@ -40,7 +72,10 @@ public class StudentService {
         LocalDate thirtyDaysAgo = LocalDate.now().minusDays(30);
         LocalDate today = LocalDate.now();
 
-        return studentRepository.findByClassroomAndActiveTrueOrderByRollNumberAsc(classroom).stream()
+        List<Student> students = studentRepository.findByClassroomAndActiveTrueOrderByRollNumberAsc(classroom);
+        students.sort((a, b) -> compareRollNumbers(a.getRollNumber(), b.getRollNumber()));
+
+        return students.stream()
                 .map(student -> {
                     StudentDto dto = StudentDto.fromEntity(student);
                     long totalDays = attendanceRepository.countStudentDaysInRange(student.getId(), thirtyDaysAgo, today);
@@ -57,7 +92,13 @@ public class StudentService {
 
     @Transactional(readOnly = true)
     public List<StudentDto> getAllActiveStudents() {
-        return studentRepository.findAllActiveStudents().stream()
+        List<Student> students = studentRepository.findAllActiveStudents();
+        students.sort((a, b) -> {
+            int classComp = a.getClassroom().getName().compareToIgnoreCase(b.getClassroom().getName());
+            if (classComp != 0) return classComp;
+            return compareRollNumbers(a.getRollNumber(), b.getRollNumber());
+        });
+        return students.stream()
                 .map(StudentDto::fromEntity)
                 .collect(Collectors.toList());
     }
@@ -75,13 +116,38 @@ public class StudentService {
                 .orElseThrow(() -> new IllegalArgumentException("Classroom not found: " + request.getClassroomId()));
 
         String admNo = request.getAdmissionNumber().trim();
-        if (studentRepository.findByAdmissionNumberIgnoreCase(admNo).isPresent()) {
-            throw new IllegalArgumentException("Admission Number already exists: " + admNo);
+        String rollNo = request.getRollNumber().trim();
+
+        // Check if an existing student has this admission number
+        Optional<Student> existingByAdm = studentRepository.findByAdmissionNumberIgnoreCase(admNo);
+        if (existingByAdm.isPresent()) {
+            Student existing = existingByAdm.get();
+            if (existing.isActive()) {
+                throw new IllegalArgumentException("Admission Number '" + admNo + "' already exists for active student " + existing.getFullName());
+            } else {
+                // Purge previously soft-deleted record so admission number is freed
+                attendanceRepository.deleteByStudentId(existing.getId());
+                studentRepository.delete(existing);
+                studentRepository.flush();
+            }
+        }
+
+        // Check if any student in this classroom has this roll number
+        List<Student> existingRollList = studentRepository.findByClassroomIdAndRollNumber(classroom.getId(), rollNo);
+        for (Student existing : existingRollList) {
+            if (existing.isActive()) {
+                throw new IllegalArgumentException("Roll Number '" + rollNo + "' is already assigned to " + existing.getFullName() + " in this class.");
+            } else {
+                // Purge previously soft-deleted record so roll number is freed
+                attendanceRepository.deleteByStudentId(existing.getId());
+                studentRepository.delete(existing);
+                studentRepository.flush();
+            }
         }
 
         Student student = new Student(
                 classroom,
-                request.getRollNumber().trim(),
+                rollNo,
                 admNo,
                 request.getFullName().trim(),
                 request.getGender() != null ? request.getGender() : "Other",
@@ -101,13 +167,28 @@ public class StudentService {
         Student student = studentRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Student not found: " + id));
 
-        if (!student.getClassroom().getId().equals(request.getClassroomId())) {
-            Classroom classroom = classroomRepository.findById(request.getClassroomId())
+        Classroom targetClassroom = student.getClassroom();
+        if (request.getClassroomId() != null && !student.getClassroom().getId().equals(request.getClassroomId())) {
+            targetClassroom = classroomRepository.findById(request.getClassroomId())
                     .orElseThrow(() -> new IllegalArgumentException("Classroom not found: " + request.getClassroomId()));
-            student.setClassroom(classroom);
+            student.setClassroom(targetClassroom);
         }
 
-        student.setRollNumber(request.getRollNumber().trim());
+        String rollNo = request.getRollNumber().trim();
+        List<Student> existingRollList = studentRepository.findByClassroomIdAndRollNumber(targetClassroom.getId(), rollNo);
+        for (Student existing : existingRollList) {
+            if (!existing.getId().equals(id)) {
+                if (existing.isActive()) {
+                    throw new IllegalArgumentException("Roll Number '" + rollNo + "' is already assigned to " + existing.getFullName() + " in this class.");
+                } else {
+                    attendanceRepository.deleteByStudentId(existing.getId());
+                    studentRepository.delete(existing);
+                    studentRepository.flush();
+                }
+            }
+        }
+
+        student.setRollNumber(rollNo);
         student.setFullName(request.getFullName().trim());
         if (request.getGender() != null) student.setGender(request.getGender());
         student.setDateOfBirth(request.getDateOfBirth());
@@ -124,8 +205,8 @@ public class StudentService {
     public void deleteStudent(Long id) {
         Student student = studentRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Student not found: " + id));
-        student.setActive(false);
-        studentRepository.save(student);
+        attendanceRepository.deleteByStudentId(id);
+        studentRepository.delete(student);
     }
 
     @Transactional(readOnly = true)
@@ -133,7 +214,9 @@ public class StudentService {
         if (!StringUtils.hasText(query)) {
             return getStudentsByClassroom(classroomId);
         }
-        return studentRepository.searchInClassroom(classroomId, query.trim()).stream()
+        List<Student> students = studentRepository.searchInClassroom(classroomId, query.trim());
+        students.sort((a, b) -> compareRollNumbers(a.getRollNumber(), b.getRollNumber()));
+        return students.stream()
                 .map(StudentDto::fromEntity)
                 .collect(Collectors.toList());
     }

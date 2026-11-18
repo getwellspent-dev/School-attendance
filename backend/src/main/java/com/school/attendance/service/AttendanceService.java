@@ -47,6 +47,7 @@ public class AttendanceService {
                 .orElseThrow(() -> new IllegalArgumentException("Classroom not found: " + classroomId));
 
         List<Student> students = studentRepository.findByClassroomAndActiveTrueOrderByRollNumberAsc(classroom);
+        students.sort((a, b) -> StudentService.compareRollNumbers(a.getRollNumber(), b.getRollNumber()));
         List<Attendance> currentAttendances = attendanceRepository.findByClassroomAndDate(classroom, date);
 
         Map<Long, Attendance> attendanceMap = currentAttendances.stream()

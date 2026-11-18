@@ -825,6 +825,18 @@ export class AttendanceComponent implements OnInit {
     });
   }
 
+  compareRoll(r1: string, r2: string): number {
+    if (!r1 && !r2) return 0;
+    if (!r1) return -1;
+    if (!r2) return 1;
+    const n1 = parseInt(r1, 10);
+    const n2 = parseInt(r2, 10);
+    if (!isNaN(n1) && !isNaN(n2)) {
+      if (n1 !== n2) return n1 - n2;
+    }
+    return r1.localeCompare(r2, undefined, { numeric: true, sensitivity: 'base' });
+  }
+
   loadAttendanceSheet(): void {
     if (!this.selectedClassroomId) return;
     this.loading = true;
@@ -833,6 +845,9 @@ export class AttendanceComponent implements OnInit {
 
     this.api.getAttendanceSheet(this.selectedClassroomId, this.selectedDate).subscribe({
       next: (sheet) => {
+        if (sheet && sheet.students) {
+          sheet.students.sort((a, b) => this.compareRoll(a.rollNumber, b.rollNumber));
+        }
         this.sheet = sheet;
         this.loading = false;
         this.loadTodaySubstitution();
@@ -899,6 +914,9 @@ export class AttendanceComponent implements OnInit {
 
     this.api.markAttendance(req).subscribe({
       next: (updatedSheet) => {
+        if (updatedSheet && updatedSheet.students) {
+          updatedSheet.students.sort((a, b) => this.compareRoll(a.rollNumber, b.rollNumber));
+        }
         this.sheet = updatedSheet;
         this.saving = false;
         this.successMessage = `Attendance successfully saved for ${this.sheet.className} on ${this.selectedDate}!`;
