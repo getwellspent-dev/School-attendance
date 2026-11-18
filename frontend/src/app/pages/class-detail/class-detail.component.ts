@@ -116,6 +116,12 @@ import { Classroom, CreateStudentRequest, Student } from '../../models/attendanc
                     <a [routerLink]="['/students', s.id]" class="btn btn-sm btn-secondary" title="View Full Attendance History">
                       History →
                     </a>
+                    <button (click)="openEditModal(s)" class="btn-edit" title="Edit Student Details">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                      </svg>
+                    </button>
                     <button (click)="confirmDelete(s)" class="btn-delete" title="Remove Student">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
@@ -132,6 +138,82 @@ import { Classroom, CreateStudentRequest, Student } from '../../models/attendanc
               </tr>
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- Edit Student Modal -->
+      <div *ngIf="showEditModal" class="modal-backdrop" (click)="closeEditModal()">
+        <div class="modal-content" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <h3 class="card-title">Edit Student — {{ editStudent.fullName }}</h3>
+            <button (click)="closeEditModal()" class="btn-close">✕</button>
+          </div>
+
+          <form (ngSubmit)="submitEdit()">
+            <div class="modal-body">
+              <div class="form-group">
+                <label class="form-label" for="e-name">Full Name *</label>
+                <input id="e-name" type="text" [(ngModel)]="editStudent.fullName" name="fullName" required class="form-input" placeholder="e.g. Diya Sen"/>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label" for="e-roll">Roll Number *</label>
+                  <input id="e-roll" type="text" [(ngModel)]="editStudent.rollNumber" name="rollNumber" required class="form-input" placeholder="e.g. 109"/>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="e-adm">Admission Number *</label>
+                  <input id="e-adm" type="text" [(ngModel)]="editStudent.admissionNumber" name="admissionNumber" required class="form-input"/>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label" for="e-gender">Gender</label>
+                  <select id="e-gender" [(ngModel)]="editStudent.gender" name="gender" class="form-select">
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="e-dob">Date of Birth</label>
+                  <input id="e-dob" type="date" [(ngModel)]="editStudent.dateOfBirth" name="dateOfBirth" class="form-input"/>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label" for="e-pname">Parent / Guardian Name</label>
+                  <input id="e-pname" type="text" [(ngModel)]="editStudent.parentName" name="parentName" class="form-input" placeholder="e.g. Sunita Sen"/>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="e-pphone">Parent Phone</label>
+                  <input id="e-pphone" type="text" [(ngModel)]="editStudent.parentPhone" name="parentPhone" class="form-input" placeholder="+91 98765 11111"/>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="e-pemail">Parent Email</label>
+                <input id="e-pemail" type="email" [(ngModel)]="editStudent.parentEmail" name="parentEmail" class="form-input" placeholder="parent@example.com"/>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="e-address">Residential Address</label>
+                <textarea id="e-address" [(ngModel)]="editStudent.address" name="address" rows="2" class="form-textarea" placeholder="Street, City, Postal Code"></textarea>
+              </div>
+            </div>
+
+            <div class="modal-footer">
+              <button type="button" (click)="closeEditModal()" class="btn btn-secondary">Cancel</button>
+              <button type="submit" [disabled]="submittingEdit" class="btn btn-primary">
+                {{ submittingEdit ? 'Saving...' : 'Save Changes' }}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
 
@@ -334,6 +416,18 @@ import { Classroom, CreateStudentRequest, Student } from '../../models/attendanc
       color: var(--absent);
       background: var(--absent-bg);
     }
+    .btn-edit {
+      background: none;
+      border: none;
+      color: var(--text-subtle);
+      cursor: pointer;
+      padding: 0.35rem;
+      border-radius: var(--radius-sm);
+    }
+    .btn-edit:hover {
+      color: var(--primary);
+      background: var(--primary-light);
+    }
     .empty-state {
       text-align: center;
       padding: 3rem 1rem;
@@ -394,6 +488,12 @@ export class ClassDetailComponent implements OnInit {
   newStudent: Partial<CreateStudentRequest> = {
     gender: 'Male'
   };
+
+  // Edit modal state
+  showEditModal = false;
+  submittingEdit = false;
+  editStudentId: number | null = null;
+  editStudent: Partial<CreateStudentRequest> = {};
 
   ngOnInit(): void {
     this.route.paramMap.subscribe(params => {
@@ -491,8 +591,65 @@ export class ClassDetailComponent implements OnInit {
     });
   }
 
-  confirmDelete(student: Student): void {
-    if (confirm(`Remove ${student.fullName} (Roll #${student.rollNumber}) from this classroom folder?`)) {
+  openEditModal(student: Student): void {
+    this.editStudentId = student.id;
+    this.editStudent = {
+      classroomId: this.classroomId,
+      fullName: student.fullName,
+      rollNumber: student.rollNumber,
+      admissionNumber: student.admissionNumber,
+      gender: student.gender,
+      dateOfBirth: student.dateOfBirth,
+      parentName: student.parentName,
+      parentPhone: student.parentPhone,
+      parentEmail: student.parentEmail,
+      address: student.address
+    };
+    this.showEditModal = true;
+    this.successMessage = '';
+    this.errorMessage = '';
+  }
+
+  closeEditModal(): void {
+    this.showEditModal = false;
+    this.editStudentId = null;
+    this.editStudent = {};
+  }
+
+  submitEdit(): void {
+    if (!this.editStudentId || !this.editStudent.fullName || !this.editStudent.rollNumber || !this.editStudent.admissionNumber) {
+      return;
+    }
+    this.submittingEdit = true;
+
+    const req: CreateStudentRequest = {
+      classroomId: this.classroomId,
+      fullName: this.editStudent.fullName,
+      rollNumber: this.editStudent.rollNumber,
+      admissionNumber: this.editStudent.admissionNumber,
+      gender: this.editStudent.gender,
+      dateOfBirth: this.editStudent.dateOfBirth,
+      parentName: this.editStudent.parentName,
+      parentPhone: this.editStudent.parentPhone,
+      parentEmail: this.editStudent.parentEmail,
+      address: this.editStudent.address
+    };
+
+    this.api.updateStudent(this.editStudentId, req).subscribe({
+      next: () => {
+        this.submittingEdit = false;
+        this.closeEditModal();
+        this.successMessage = `Student details updated successfully!`;
+        this.loadStudents();
+      },
+      error: (err) => {
+        this.submittingEdit = false;
+        this.errorMessage = err.error?.message || 'Failed to update student details.';
+      }
+    });
+  }
+
+  confirmDelete(student: Student): void {    if (confirm(`Remove ${student.fullName} (Roll #${student.rollNumber}) from this classroom folder?`)) {
       this.api.deleteStudent(student.id).subscribe({
         next: () => {
           this.successMessage = `Student ${student.fullName} removed.`;
